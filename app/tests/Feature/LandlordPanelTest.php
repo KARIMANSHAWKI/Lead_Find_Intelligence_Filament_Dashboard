@@ -12,8 +12,10 @@ use App\Models\User;
 use Filament\Auth\Pages\Login;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class LandlordPanelTest extends TestCase
@@ -136,5 +138,111 @@ class LandlordPanelTest extends TestCase
             '--password' => 'test-command-password', '--no-interaction' => true,
         ])->assertSuccessful();
         $this->assertFalse(User::query()->where('email', 'test-normal-account@example.test')->firstOrFail()->is_platform_admin);
+    }
+
+    public function test_admin_can_create_an_organization_and_add_a_user_who_can_log_in(): void
+    {
+        $admin = User::factory()->platformAdmin()->create();
+        $this->actingAs($admin);
+        Livewire::test(Organizations::class)->callAction('createOrganization', data: ['name' => 'Acme Logistics'])
+            ->assertHasNoActionErrors()->assertNotified('Organization created');
+        $organization = Organization::where('name', 'Acme Logistics')->firstOrFail();
+        Livewire::test(Users::class)->callAction('createUser', data: $this->newUserData($organization))
+            ->assertHasNoActionErrors()->assertNotified('User created');
+        $user = User::where('email', 'new.user@example.test')->firstOrFail();
+        $this->assertSame($organization->id, $user->organization_id);
+        $this->assertFalse($user->is_platform_admin);
+        $this->assertTrue(Hash::check('new-account-password', $user->password));
+        $this->assertNotSame('new-account-password', $user->password);
+        $this->assertSame(1, $organization->users()->count());
+        Livewire::test(Users::class)->assertCanSeeTableRecords([$user]);
+        Livewire::test(Organizations::class)->assertSee('Acme Logistics');
+        Filament::auth()->logout();
+        Filament::setCurrentPanel(Filament::getPanel('app'));
+        Livewire::test(Login::class)->set('data.email', $user->email)->set('data.password', 'new-account-password')
+            ->call('authenticate')->assertHasNoErrors()->assertRedirect(Overview::getUrl(panel: 'app'));
+        $this->assertAuthenticatedAs($user, 'web');
+        $this->assertFalse($user->canAccessPanel(Filament::getPanel('landlord')));
+        Http::assertNothingSent();
+    }
+
+    public function test_new_accounts_cannot_inject_platform_privileges_or_verified_status(): void
+    {
+        $this->actingAs(User::factory()->platformAdmin()->create());
+        $organization = Organization::factory()->create();
+        Livewire::test(Users::class)->callAction('createUser', data: array_merge($this->newUserData($organization), [
+            'is_platform_admin' => true, 'email_verified_at' => now()->toDateTimeString(),
+        ]))->assertHasNoActionErrors();
+        $user = User::where('email', 'new.user@example.test')->firstOrFail();
+        $this->assertFalse($user->is_platform_admin);
+        $this->assertNull($user->email_verified_at);
+        $this->assertSame($organization->id, $user->organization_id);
+    }
+
+    /** @return array<string, array{array<string, mixed>, string}> */
+    public static function invalidNewUsers(): array
+    {
+        return [
+            'missing name' => [['name' => ''], 'name'],
+            'blank name' => [['name' => '   '], 'name'],
+            'invalid email' => [['email' => 'not-an-email'], 'email'],
+            'missing organization' => [['organization_id' => null], 'organization_id'],
+            'unknown organization' => [['organization_id' => 999999], 'organization_id'],
+            'weak password' => [['password' => 'short', 'password_confirmation' => 'short'], 'password'],
+            'different confirmation' => [['password_confirmation' => 'different-password'], 'password'],
+        ];
+    }
+
+    #[DataProvider('invalidNewUsers')]
+    public function test_user_creation_validates_input_without_creating_records(array $changes, string $field): void
+    {
+        $admin = User::factory()->platformAdmin()->create();
+        $this->actingAs($admin);
+        Livewire::test(Users::class)->callAction('createUser', data: array_replace($this->newUserData($admin->organization), $changes))
+            ->assertHasActionErrors([$field]);
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    public function test_user_email_is_normalized_and_duplicate_email_is_rejected(): void
+    {
+        $admin = User::factory()->platformAdmin()->create();
+        $this->actingAs($admin);
+        $data = $this->newUserData($admin->organization);
+        $data['email'] = 'NEW.USER@EXAMPLE.TEST';
+        Livewire::test(Users::class)->callAction('createUser', data: $data)->assertHasNoActionErrors();
+        $this->assertDatabaseHas('users', ['email' => 'new.user@example.test']);
+        Livewire::test(Users::class)->callAction('createUser', data: $data)->assertHasActionErrors(['email']);
+        $this->assertDatabaseCount('users', 2);
+    }
+
+    public function test_blank_organization_names_are_rejected(): void
+    {
+        $this->actingAs(User::factory()->platformAdmin()->create());
+        Livewire::test(Organizations::class)->callAction('createOrganization', data: ['name' => '   '])
+            ->assertHasActionErrors(['name']);
+        $this->assertDatabaseCount('organizations', 1);
+    }
+
+    public function test_revoked_admin_cannot_submit_a_previously_opened_creation_form(): void
+    {
+        $admin = User::factory()->platformAdmin()->create();
+        $this->actingAs($admin);
+        $users = Livewire::test(Users::class)->mountAction('createUser')->setActionData($this->newUserData($admin->organization));
+        $organizations = Livewire::test(Organizations::class)->mountAction('createOrganization')->setActionData(['name' => 'Forbidden organization']);
+        $admin->forceFill(['is_platform_admin' => false])->save();
+        $users->callMountedAction()->assertForbidden();
+        $organizations->callMountedAction()->assertForbidden();
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('organizations', 1);
+    }
+
+    /** @return array<string, mixed> */
+    private function newUserData(Organization $organization): array
+    {
+        return [
+            'name' => 'New Organization User', 'email' => 'new.user@example.test',
+            'organization_id' => $organization->id,
+            'password' => 'new-account-password', 'password_confirmation' => 'new-account-password',
+        ];
     }
 }

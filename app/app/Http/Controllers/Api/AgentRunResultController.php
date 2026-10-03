@@ -30,6 +30,7 @@ class AgentRunResultController extends Controller
         try {
             if ($data['status'] === 'failed') {
                 $message = match ($request->input('error_code')) {
+                    'invalid_icp' => 'Company discovery rejected your ICP filters. Review target industries, location, and company size.',
                     'timeout' => 'The agent run timed out. Please try again.',
                     'service_unavailable' => 'Lead Intelligence service is temporarily unavailable.',
                     'invalid_response' => 'The service returned an invalid response.',

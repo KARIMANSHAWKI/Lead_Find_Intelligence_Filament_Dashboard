@@ -4,7 +4,10 @@ namespace App\Filament\Landlord\Pages;
 
 use App\Models\Organization;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -33,6 +36,30 @@ class Organizations extends Page implements HasTable
     public function getSubheading(): ?string
     {
         return 'All organizations using Lead Intelligence.';
+    }
+
+    /** @return array<Action> */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('createOrganization')
+                ->label('Add organization')
+                ->icon(Heroicon::OutlinedPlus)
+                ->authorize(fn (): bool => static::canAccess())
+                ->modalHeading('Add organization')
+                ->modalDescription('Create a shared space for a customer’s users, ICP, and prospect intelligence.')
+                ->modalSubmitActionLabel('Create organization')
+                ->schema([
+                    TextInput::make('name')->label('Organization name')->placeholder('Acme Logistics')
+                        ->required()->string()->trim()->maxLength(255)->rules(['regex:/\S/u']),
+                ])
+                ->action(function (array $data): void {
+                    abort_unless(static::canAccess(), 403);
+                    Organization::create(['name' => $data['name']]);
+                    $this->resetTable();
+                    Notification::make()->title('Organization created')->success()->send();
+                }),
+        ];
     }
 
     public function table(Table $table): Table

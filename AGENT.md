@@ -316,13 +316,13 @@ Every User belongs to exactly one Organization. An Organization has many Users, 
 
 All business reads, mutations, dashboard aggregates, search/filter options, related records, and detail pages must be scoped to the authenticated user's organization. Same-organization users share data. Cross-organization record access must be blocked server-side, including direct URLs and manipulated Livewire state.
 
-Organization IDs must never be editable fields or trusted from external responses. Resolve ICP through the authenticated user's Organization and enforce one ICP per organization. A Prospect and its AgentRun must have the same organization.
+Organization IDs must never be editable tenant business fields or trusted from external responses. Platform-admin account provisioning may explicitly select the organization for a new ordinary user. Resolve ICP through the authenticated user's Organization and enforce one ICP per organization. A Prospect and its AgentRun must have the same organization.
 
 Existing FastAPI integration resolves User → Organization → organization ICP, creates an organization-owned run, and persists its prospects in that organization. FastAPI remains stateless about Laravel tenancy.
 
 Create accounts through organization relationships. The existing `make:filament-user` console command creates an organization by default, or accepts a trusted `--organization` option for an existing organization. This is account provisioning, not an invitation or registration UI.
 
-The user separately authorized a read-only landlord panel at `/landlord` for listing all Users and Organizations. Only protected `is_platform_admin` accounts may access these directories. This metadata directory is the sole scope exception; tenant business records and the `/app` dashboard remain organization-scoped, including for platform administrators. Grant access only through trusted console provisioning; do not add RBAC infrastructure or editable privilege fields.
+The user separately authorized a landlord panel at `/landlord` for listing all Users and Organizations and creating organizations and application users. Only protected `is_platform_admin` accounts may access these directories. This metadata directory and its authorized account provisioning actions are the sole scope exceptions; tenant business records and the `/app` dashboard remain organization-scoped, including for platform administrators. Grant platform-admin access only through trusted console provisioning; do not add RBAC infrastructure or editable privilege fields. Only platform admins may select an organization while creating an ordinary user, and creation actions must recheck authorization server-side. Passwords must be confirmed and hashed; never mass-assign privilege flags from these forms.
 
 Use simple Eloquent relationships and query constraints. Do not introduce tenancy packages, separate databases, domains/subdomains, complex tenant middleware, invitations, roles, billing, or subscriptions.
 

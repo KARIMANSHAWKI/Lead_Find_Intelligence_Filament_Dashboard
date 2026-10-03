@@ -145,6 +145,24 @@ class AgentRunCallbackTest extends TestCase
         $this->postJson($this->url, $this->callbackPayload($run), $this->headers())->assertConflict();
     }
 
+    public function test_rejected_icp_filters_show_safe_actionable_feedback(): void
+    {
+        $run = app(RunLeadIntelligenceAction::class)->execute($this->user);
+        $this->postJson($this->url, [
+            'run_id' => $run->id,
+            'status' => 'failed',
+            'error_code' => 'invalid_icp',
+            'error_message' => 'private-provider-secret',
+        ], $this->headers())->assertOk()->assertJsonPath('status', 'failed');
+
+        $message = 'Company discovery rejected your ICP filters. Review target industries, location, and company size.';
+        $this->assertSame($message, $run->fresh()->error_message);
+        $notification = $this->user->notifications()->firstOrFail();
+        $this->assertSame($message, $notification->data['body']);
+        $this->assertStringNotContainsString('private-provider-secret', json_encode($notification->data));
+        $this->assertDatabaseCount('prospects', 0);
+    }
+
     public function test_callback_does_not_require_browser_login_or_csrf(): void
     {
         $run = app(RunLeadIntelligenceAction::class)->execute($this->user);

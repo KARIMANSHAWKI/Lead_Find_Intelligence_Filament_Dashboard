@@ -134,19 +134,19 @@ Before relying on a package's API, confirm its installed version:
 - A Prospect's organization must match its AgentRun's organization. Preserve this invariant when creating or changing associations.
 - Existing FastAPI execution resolves User → Organization → organization ICP and persists the run/prospects in that organization. FastAPI remains stateless about tenancy and does not enforce Laravel tenant isolation.
 - Use OrganizationFactory and UserFactory for valid tenant fixtures. Use ProspectFactory::forOrganization() or associate an AgentRun so prospect/run organizations match.
-- New accounts must be assigned through an Organization's users relationship or an explicit trusted association. The existing `make:filament-user` console command creates an organization by default; its trusted `--organization` option associates an existing organization. There is no organization selector, invitation flow, RBAC, or automatic registration in the UI.
+- New accounts must be assigned through an Organization's users relationship or an explicit trusted association. The existing `make:filament-user` console command creates an organization by default; its trusted `--organization` option associates an existing organization. Organization selection is allowed only in the platform-admin user creation form. Tenant users cannot choose or change their organization. There is no invitation flow, RBAC, or public registration.
 - Existing user-owned data is backfilled into separate organizations, one per existing user, preserving its previous isolation. Do not merge existing users' organizations automatically.
 - Do not add tenancy packages, separate databases, domains/subdomains, tenant roles, invitations, billing, or tenancy middleware frameworks for this MVP.
 
 
 # Landlord administration
 
-- The user explicitly authorized platform-wide user and organization listings in a separate `/landlord` Filament panel.
+- The user explicitly authorized platform-wide user and organization listings and creation in a separate `/landlord` Filament panel.
 - Use the existing User model and web guard. `is_platform_admin` defaults to false and is excluded from mass assignment and editable UI fields.
-- Only platform administrators may access landlord pages and Livewire table queries, including on hydration. Users and Organizations directories are read-only and may query across organizations after authorization.
-- This directory authorization is the only exception to organization-scoped listings. `/app`, ICP, prospects, signals, agent runs, and dashboard queries remain organization-scoped even for platform administrators.
+- Only platform administrators may access landlord pages and Livewire table queries, including on hydration. Users and Organizations directories may query across organizations and create organizations/application users after authorization. Creation actions must recheck platform-admin access server-side before saving; do not add editing or deletion implicitly.
+- Landlord metadata listing and account provisioning are the only exceptions to organization-scoped queries. `/app`, ICP, prospects, signals, agent runs, and dashboard queries remain organization-scoped even for platform administrators.
 - Keep `/app` navigation unchanged. Landlord navigation contains only Users and Organizations.
-- Grant platform access only through trusted console provisioning with `make:filament-user --panel=landlord --platform-admin`; no roles/permissions package, public registration, impersonation, invitations, or privilege-editing forms.
+- Grant platform access only through trusted console provisioning with `make:filament-user --panel=landlord --platform-admin`; no roles/permissions package, public registration, impersonation, invitations, or privilege-editing forms. The landlord Add user action creates ordinary organization users through the selected Organization relationship, validates a unique email and confirmed password, and relies on the User password hash cast. Never accept is_platform_admin or verification flags from that form.
 - Never commit account credentials. Local provisioned credentials are runtime data and may be provided directly to the requesting user.
 
 

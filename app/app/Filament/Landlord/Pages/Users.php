@@ -2,9 +2,14 @@
 
 namespace App\Filament\Landlord\Pages;
 
+use App\Models\Organization;
 use App\Models\User;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Panel;
 use Filament\Support\Icons\Heroicon;
@@ -13,6 +18,8 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class Users extends Page implements HasTable
 {
@@ -40,6 +47,45 @@ class Users extends Page implements HasTable
     public function getSubheading(): ?string
     {
         return 'All platform accounts and their organizations.';
+    }
+
+    /** @return array<Action> */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('createUser')
+                ->label('Add user')
+                ->icon(Heroicon::OutlinedUserPlus)
+                ->authorize(fn (): bool => static::canAccess())
+                ->modalHeading('Add organization user')
+                ->modalDescription('Create an account for the application dashboard. Users in the same organization share their customer intelligence.')
+                ->modalSubmitActionLabel('Create user')
+                ->schema([
+                    TextInput::make('name')->label('Full name')->required()->string()->trim()->maxLength(255)->rules(['regex:/\S/u']),
+                    TextInput::make('email')->label('Email address')->email()->required()->trim()->maxLength(255)
+                        ->mutateStateForValidationUsing(fn (?string $state): string => Str::lower(trim($state ?? '')))
+                        ->dehydrateStateUsing(fn (string $state): string => Str::lower(trim($state)))
+                        ->unique(User::class, 'email'),
+                    Select::make('organization_id')->label('Organization')->required()->searchable()
+                        ->options(fn (): array => Organization::query()->orderBy('name')->get()
+                            ->mapWithKeys(fn (Organization $organization): array => [$organization->id => $organization->name.' · #'.$organization->id])->all())
+                        ->rules(['integer', 'exists:organizations,id'])
+                        ->helperText('Create an organization on the Organizations page before adding its users.'),
+                    TextInput::make('password')->label('Password')->password()->revealable()->required()
+                        ->rule(Password::min(12))->maxLength(72)->confirmed()
+                        ->helperText('Use 12–72 characters. Share the password directly with the user.'),
+                    TextInput::make('password_confirmation')->label('Confirm password')->password()->revealable()->required()
+                        ->dehydrated(false),
+                ])
+                ->action(function (array $data): void {
+                    abort_unless(static::canAccess(), 403);
+                    Organization::findOrFail($data['organization_id'])->users()->create([
+                        'name' => $data['name'], 'email' => $data['email'], 'password' => $data['password'],
+                    ]);
+                    $this->resetTable();
+                    Notification::make()->title('User created')->body('The user can now sign in to the application dashboard.')->success()->send();
+                }),
+        ];
     }
 
     public function table(Table $table): Table
