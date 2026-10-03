@@ -1,0 +1,64 @@
+# Local environment values; keep configuration templates.
+.env
+.env.*
+!.env.example
+!.env.*.example
+.envrc
+auth.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Installed dependencies (keep Composer and npm lockfiles).
+vendor/
+node_modules/
+
+# Generated Laravel / Vite assets.
+/app/public/build/
+/app/public/hot
+/app/public/storage
+/app/public/css/filament/
+/app/public/js/filament/
+/app/public/fonts/filament/
+/app/public/fonts-manifest.dev.json
+
+# Local databases, backups, and exports.
+*.sqlite*
+*.sqlite3*
+/app/leads_find
+/app/leads_find-shm
+/app/leads_find-wal
+/app/leads_find-journal
+/backups/
+/exports/
+/*.sql
+/*.sql.gz
+
+# Logs, test caches, and coverage reports.
+*.log
+.phpunit.cache/
+.phpunit.result.cache
+coverage/
+.coverage
+.nyc_output/
+
+# Local editor and assistant state.
+.idea/
+.vscode/
+.nova/
+.zed/
+.codex/
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS metadata, including downloaded Windows alternate data streams.
+.DS_Store
+Thumbs.db
+Desktop.ini
+*:Zone.Identifier*
+
+# Preserve Laravel's storage/cache directory placeholders and source files.
+# Additional Laravel-specific rules remain in app/.gitignore.

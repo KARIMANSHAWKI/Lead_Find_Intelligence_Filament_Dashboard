@@ -1,0 +1,39 @@
+version: "3.9"
+services:
+  nginx:
+    build: services/nginx/
+    ports:
+      - "8092:80"
+    volumes:
+      - ./app/:/var/www/html/
+  php:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    build: services/php/
+    expose:
+      - "9000"
+    volumes:
+       - ./app/:/var/www/html/
+       - ./services/php/msmtprc:/etc/msmtprc:ro
+    environment:
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+
+  db:
+    image: mariadb:11
+    ports:
+      - "3366:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    environment:
+      MARIADB_ROOT_PASSWORD: password
+      MARIADB_DATABASE: leads_find
+      MARIADB_PASSWORD: password
+#      MARIADB_USER: root
+
+
+volumes:
+  mysql-data:
+  redis-data:
+
+
+
